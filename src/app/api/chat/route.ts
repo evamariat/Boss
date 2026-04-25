@@ -1,8 +1,7 @@
-// app/api/chat/route.ts
 import { supabaseServer } from "@/database/db";
 import { addTokenUsage, getTokenUsage } from "@/database/usage";
 import { ensureUserQuota } from "@/database/quotas";
-import { openai } from "@/lib/openai"; // your OpenAI client
+import { openai } from "@/lib/openai";
 
 export async function POST(req: Request) {
   const supabase = supabaseServer();
@@ -12,35 +11,53 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+    return new Response("Not authenticated", { status: 401 });
   }
 
   const userId = user.id;
   const { messages } = await req.json();
 
-  // Call OpenAI
-  const completion = await openai.chat.completions.create({
+  // Create a streaming OpenAI response
+  const stream = await openai.chat.completions.create({
     model: "gpt-4.1",
     messages,
+    stream: true,
   });
 
-  const tokensUsed = completion.usage.total_tokens;
+  // We accumulate tokens as they stream
+  let totalTokens = 0;
 
-  // Update usage
-  await addTokenUsage(userId, tokensUsed);
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
 
-  // Ensure quota exists
-  await ensureUserQuota(userId);
+  const readable = new ReadableStream({
+    async start(controller) {
+      for await (const chunk of stream) {
+        const text = chunk.choices?.[0]?.delta?.content || "";
 
-  // Fetch usage + limits
-  const usage = await getTokenUsage(userId);
+        // Count tokens (OpenAI returns usage only at end, so we approximate)
+        totalTokens += text.split(/\s+/).length;
 
-  const tokensLeftDaily = usage.dailyLimit - usage.dailyUsed;
-  const tokensLeftMonthly = usage.monthlyLimit - usage.monthlyUsed;
+        controller.enqueue(encoder.encode(text));
+      }
 
-  return Response.json({
-    message: completion.choices[0].message,
-    tokensLeftDaily,
-    tokensLeftMonthly,
+      controller.close();
+
+      // After streaming finishes → update usage in Supabase
+      try {
+        await addTokenUsage(userId, totalTokens);
+        await ensureUserQuota(userId);
+      } catch (err) {
+        console.error("Usage update failed:", err);
+      }
+    },
+  });
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache",
+      "Transfer-Encoding": "chunked",
+    },
   });
 }
