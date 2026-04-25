@@ -1,4 +1,3 @@
-// components/tokens-badge.tsx
 "use client";
 
 import { useEffect } from "react";
@@ -8,6 +7,7 @@ import { useTokenStore } from "@/lib/store/tokens";
 export function TokensBadge() {
   const { tokensLeftDaily, refresh } = useTokenStore();
 
+  // Refresh on mount
   useEffect(() => {
     refresh();
   }, []);
