@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useTokenStore } from "@/lib/store/tokens";
+import { useTTS } from "./useTTS";
 
 export function useStreamChat() {
   const [messages, setMessages] = useState([
@@ -9,10 +10,10 @@ export function useStreamChat() {
   ]);
 
   const { refresh } = useTokenStore();
+  const { speak } = useTTS();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   async function sendMessage(userMessage: string) {
-    // Add user message + empty assistant placeholder
     const newMessages = [
       ...messages,
       { role: "user", content: userMessage },
@@ -35,23 +36,24 @@ export function useStreamChat() {
       const { value, done } = await reader.read();
       if (done) break;
 
-      assistantText += decoder.decode(value);
+      const chunk = decoder.decode(value);
+      assistantText += chunk;
 
-      // Update assistant message as it streams
       setMessages((prev) => {
         const updated = [...prev];
         updated[updated.length - 1].content = assistantText;
         return updated;
       });
 
-      // Auto-scroll
+      // Speak the chunk
+      speak(chunk);
+
       scrollRef.current?.scrollTo({
         top: scrollRef.current.scrollHeight,
         behavior: "smooth",
       });
     }
 
-    // Refresh token badge after streaming finishes
     refresh();
   }
 
