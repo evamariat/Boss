@@ -3,9 +3,17 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useVoice } from "@/hooks/useVoice";
 
 export function ChatInput({ onSend }) {
   const [value, setValue] = useState("");
+  const { isListening, transcript, startListening, stopListening, setTranscript } =
+    useVoice();
+
+  // When transcript updates, sync to input
+  if (transcript && transcript !== value) {
+    setValue(transcript);
+  }
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -13,6 +21,7 @@ export function ChatInput({ onSend }) {
 
     onSend(value);
     setValue("");
+    setTranscript("");
   }
 
   return (
@@ -20,8 +29,17 @@ export function ChatInput({ onSend }) {
       <Input
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="Type your message..."
+        placeholder="Speak or type…"
       />
+
+      <Button
+        type="button"
+        variant={isListening ? "destructive" : "secondary"}
+        onClick={isListening ? stopListening : startListening}
+      >
+        {isListening ? "Stop" : "🎤"}
+      </Button>
+
       <Button type="submit">Send</Button>
     </form>
   );
