@@ -1,30 +1,23 @@
-import { Pool } from 'pg';
-import dotenv from 'dotenv';
+// src/database/db.ts
+import { cookies } from "next/headers";
+import {
+  createBrowserClient,
+  createServerClient,
+} from "@supabase/ssr";
 
-dotenv.config();
-
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
-
-export interface BossUser {
-  discordId: string;
-  username: string;
-  style: 'SASSY' | 'SERIOUS' | 'FUNNY';
-  registeredAt: Date;
+export function supabaseBrowser() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 }
 
-export async function getOrCreateUser(discordId: string, username: string) {
-  const result = await pool.query(
-    `INSERT INTO boss_users (discord_id, username, style) 
-     VALUES ($1, $2, 'SASSY') 
-     ON CONFLICT (discord_id) 
-     DO UPDATE SET username = $2 
-     RETURNING *`,
-    [discordId, username]
+export function supabaseServer() {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies,
+    }
   );
-  return result.rows[0];
 }
